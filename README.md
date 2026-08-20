@@ -6,7 +6,6 @@
 
 > **注意：** 本安装程序会对设备的 UBI 存储布局进行操作。请在确认自己了解安装流程后再进行操作。错误的操作可能导致设备无法正常启动。
 
----
 
 ## 安装流程
 
@@ -16,7 +15,6 @@
 2. 通过 TFTP 启动 W1700K UBI Installer
 3. 运行 UBI Installer 并完成 OpenWrt 安装
 
----
 
 ## 1. 安装 U-Boot Chainloader
 
@@ -47,7 +45,6 @@ reset
 
 设备随后会重新启动并进入 **U-Boot Chainloader**。
 
----
 
 ## 2. 加载 W1700K UBI Installer
 
@@ -76,7 +73,6 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 4. Boot installer via TFTP.
 ```
 
----
 
 ## 3. 运行 W1700K UBI Installer
 
@@ -102,7 +98,6 @@ yes
 no
 ```
 
----
 
 ## 4. 等待安装完成
 
@@ -112,7 +107,6 @@ Installer 会自动执行必要的 UBI 迁移，并为 W1700K 安装一个初始
 
 安装完成并成功启动后，即可继续升级到自己选择的 OpenWrt 固件。
 
----
 
 # 固件下载
 
@@ -133,7 +127,6 @@ Installer 会自动执行必要的 UBI 迁移，并为 W1700K 安装一个初始
 
 👉 **[下载 W1700K OpenWrt 固件](https://github.com/yahuisme/w1700k-openwrt/releases)**
 
----
 
 ## 固件升级说明
 
@@ -151,7 +144,6 @@ sysupgrade
 
 > **请务必确认所使用的固件适用于 Quantum Fiber / Gemtek W1700K，并选择正确的固件类型。**
 
----
 
 ## 关于 UBI Installer
 
@@ -165,7 +157,6 @@ sysupgrade
 
 如果你的 W1700K 已经正常运行 UBI2/OpenWrt，**没有必要为了升级系统而重新运行本 Installer。**
 
----
 
 ## 文件说明
 
@@ -185,7 +176,6 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 
 用于通过 TFTP 启动 UBI Installer，并执行 UBI 存储布局初始化/迁移以及 OpenWrt 安装。
 
----
 
 ## 上游项目
 
@@ -195,7 +185,6 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 * [hurrian/w1700k-ubi-installer](https://github.com/hurrian/w1700k-ubi-installer)
 * [w1700k/ubi2-installer](https://github.com/w1700k/ubi2-installer)
 
----
 
 ## 免责声明
 
@@ -211,7 +200,6 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 
 因刷写过程中操作错误、文件错误、断电或其他原因导致的设备损坏，由使用者自行承担责任。
 
----
 
 ## License
 
