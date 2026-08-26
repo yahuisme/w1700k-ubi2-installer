@@ -134,11 +134,15 @@ jobs:
               fi
             done
 
+      - name: Set release name
+        id: release_meta
+        run: echo "release_name=$(date -u +'%Y.%m.%d') - Installer for W1700K v2.0" >> "$GITHUB_OUTPUT"
+
       - name: Create new GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ubi2-installer-${{ github.run_number }}
-          name: Installer for W1700K v2.0
+          name: ${{ steps.release_meta.outputs.release_name }}
           body: |
             # W1700K UBI2 U-Boot Chainloader + OpenWrt Installer
 
