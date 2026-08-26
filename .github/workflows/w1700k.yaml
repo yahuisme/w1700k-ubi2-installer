@@ -122,13 +122,25 @@ jobs:
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
 
-      - name: Create or update GitHub Release
+      - name: Remove previous installer releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
+            while IFS= read -r tag; do
+              if [[ "$tag" == ubi2-installer-* && "$tag" != "$current_tag" ]]; then
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+              fi
+            done
+
+      - name: Create new GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ubi2-installer
-          name: W1700K UBI2 U-Boot Chainloader + OpenWrt Installer
+          tag_name: ubi2-installer-${{ github.run_number }}
+          name: Installer for W1700K v2.0
           body: |
-            # W1700K UBI2 引导加载器与 OpenWrt 安装器
+            # W1700K UBI2 U-Boot Chainloader + OpenWrt Installer
 
             **刷写设备前，请务必仔细阅读[安装说明](https://github.com/yahuisme/w1700k-ubi2-installer/blob/main/README.md)。**
 
