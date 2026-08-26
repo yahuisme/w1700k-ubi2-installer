@@ -1,5 +1,8 @@
 name: W1700k UBI Installer (ARM) w custom payload
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
 
@@ -118,3 +121,22 @@ jobs:
           path: |
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ubi2-installer
+          name: Installer for W1700K compat v2.0
+          body: |
+            # U-Boot Chainloader + OpenWrt Installer for the Gemtek W1700K
+
+            **Please thoroughly read the [installation instructions](https://github.com/yahuisme/w1700k-ubi2-installer/blob/main/README.md) before flashing your device.**
+
+            This release contains the W1700K UBI installer and U-Boot chainloader images built from the current workflow sources.
+          files: |
+            output/installer/${{ env.INSTALLER_IMAGE }}
+            output/installer/${{ env.UBOOT_IMAGE }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
