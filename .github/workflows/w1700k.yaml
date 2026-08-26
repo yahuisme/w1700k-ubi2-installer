@@ -128,11 +128,11 @@ jobs:
           tag_name: ubi2-installer
           name: Installer for W1700K compat v2.0
           body: |
-            # U-Boot Chainloader + OpenWrt Installer for the Gemtek W1700K
+            # W1700K UBI2 引导加载器与 OpenWrt 安装器
 
-            **Please thoroughly read the [installation instructions](https://github.com/yahuisme/w1700k-ubi2-installer/blob/main/README.md) before flashing your device.**
+            **刷写设备前，请务必仔细阅读[安装说明](https://github.com/yahuisme/w1700k-ubi2-installer/blob/main/README.md)。**
 
-            This release contains the W1700K UBI installer and U-Boot chainloader images built from the current workflow sources.
+            本项目基于 [hurrian 的 ubi-installer](https://github.com/hurrian/w1700k-ubi-installer)，并注入了自定义的 sysupgrade 固件，适用于 Gemtek W1700K。
           files: |
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
