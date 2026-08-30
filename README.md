@@ -176,6 +176,12 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 
 用于通过 TFTP 启动 UBI Installer，并执行 UBI 存储布局初始化/迁移以及 OpenWrt 安装。
 
+### 内嵌固件载荷
+
+`files/installer/` 下的 `openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb` 是手动注入的初始 OpenWrt 固件（当前为 2026.04.27 的 `ubi2` 构建），Installer 安装时会将其写入设备。
+
+W1700K 固件发布新版本后，如需让新安装的设备直接获得最新固件，请从 [w1700k-openwrt Releases](https://github.com/yahuisme/w1700k-openwrt/releases) 下载对应 `ubi2` 的 sysupgrade 镜像替换该文件，提交后重新运行构建工作流即可。
+
 
 ## 上游项目
 

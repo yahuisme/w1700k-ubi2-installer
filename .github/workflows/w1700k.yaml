@@ -18,27 +18,8 @@ env:
   UBOOT_IMAGE: openwrt-airoha-an7581-gemtek_w1700k-ubi-chainload-uboot.itb
 
 jobs:
-  check_commits:
-    name: Check Commits
-    runs-on: ubuntu-24.04-arm
-    outputs:
-      latest_commit_sha: ${{ steps.get_sha.outputs.latest_commit_sha }}
-    steps:
-      - name: Checkout remote repository
-        uses: actions/checkout@main
-        with:
-          repository: ${{ env.REMOTE_REPOSITORY }}
-          ref: ${{ env.REMOTE_BRANCH }}
-
-      - name: Get the latest commit SHA
-        id: get_sha
-        run: |
-          echo "latest_commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "latest_commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
   build:
     name: Build OpenWrt installer images
-    needs: [check_commits]
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout installer repository

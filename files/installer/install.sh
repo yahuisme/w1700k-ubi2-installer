@@ -173,14 +173,14 @@ build_factory_volume() {
   log "Writing WAN/LAN MACs as hex bytes..."
   WAN_HEX="$(mac_to_hex "$WAN_MAC")"
   LAN_HEX="$(mac_to_hex "$LAN_MAC")"
-  printf "$(hex_to_bytes "$WAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$WAN_MAC_OFF" conv=notrunc 2>/dev/null
-  printf "$(hex_to_bytes "$LAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$LAN_MAC_OFF" conv=notrunc 2>/dev/null
+  printf '%b' "$(hex_to_bytes "$WAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$WAN_MAC_OFF" conv=notrunc 2>/dev/null
+  printf '%b' "$(hex_to_bytes "$LAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$LAN_MAC_OFF" conv=notrunc 2>/dev/null
 
   log "Writing fan_id and serial_number as hex bytes..."
   FAN_HEX="$(str_to_hex "$FAN_ID")"
   SER_HEX="$(str_to_hex "$SERIAL_NUMBER")"
-  printf "$(hex_to_bytes "$FAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$FAN_ID_OFF" conv=notrunc 2>/dev/null
-  printf "$(hex_to_bytes "$SER_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$SERIAL_OFF" conv=notrunc 2>/dev/null
+  printf '%b' "$(hex_to_bytes "$FAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$FAN_ID_OFF" conv=notrunc 2>/dev/null
+  printf '%b' "$(hex_to_bytes "$SER_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$SERIAL_OFF" conv=notrunc 2>/dev/null
 
   log "Factory volume built at $FACTORY_BLOB ."
   cp "$FACTORY_BLOB" "$factory_bin_path"
