@@ -74,7 +74,7 @@ Installer 会自动完成 UBI 迁移并安装初始 OpenWrt，无需其它操作
 
 固件由 GitHub Actions 自动构建并发布在各仓库 Releases 页面，请确认下载的是适用于 W1700K 的 `ubi2` / `ubi2-oc` sysupgrade 镜像。
 
-**内嵌初始固件：** `files/installer/` 下的 `openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb` 为 Installer 安装时写入的初始固件（当前为 2026.04.27 的 `ubi2` 构建）。如需让新安装设备直接获得最新固件，从上述任一仓库 Releases 下载对应 `ubi2` sysupgrade 镜像替换该文件，提交后重新运行构建工作流即可。
+**内嵌初始固件：** `files/installer/` 下的 `openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb` 为 Installer 安装时写入的初始固件（当前为 2026.09.01 的 `ubi2` 构建 r36013）。如需让新安装设备直接获得最新固件，从上述任一仓库 Releases 下载对应 `ubi2` sysupgrade 镜像替换该文件，提交后重新运行构建工作流即可。
 
 ## 关于 Installer
 
