@@ -122,6 +122,8 @@ jobs:
       - name: Create new GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          target_commitish: ${{ github.sha }}
           tag_name: ubi2-installer-${{ github.run_number }}
           name: ${{ steps.release_meta.outputs.release_name }}
           body: |
@@ -135,5 +137,3 @@ jobs:
             output/installer/${{ env.UBOOT_IMAGE }}
           overwrite_files: true
           fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
