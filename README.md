@@ -1,24 +1,144 @@
 # W1700K UBI Installer
 
-用于 **Quantum Fiber / Gemtek W1700K** 的 OpenWrt 安装程序（基于 UBI），基于 [dangowrt/owrt-ubi-installer](https://github.com/dangowrt/owrt-ubi-installer) 等上游项目开发。
+用于 Gemtek W1700K 安装 OpenWrt UBI2。
 
-> ⚠️ **注意：** 安装程序会操作设备的 UBI 存储布局，错误操作可能导致设备无法启动，请确认了解安装流程后再操作。
+> ⚠️ 刷写 U-Boot / NAND 存储存在变砖风险，请确认设备型号和固件正确。刷写过程中不要断电。
 
-## 安装流程
+## 1. 准备
 
-1. 安装 U-Boot Chainloader
-2. 通过 TFTP 启动 UBI Installer
-3. 运行 Installer 完成 OpenWrt 安装
+需要：
 
-### 1. 安装 U-Boot Chainloader
+* W1700K
+* USB-TTL（3.3V TTL）
+* 网线
+* Windows PC
+* [PuTTY](https://www.putty.org/)
+* [Tftpd64](https://bitbucket.org/phjounin/tftpd64/wiki/Home)
 
-将电脑有线网卡 IP 设为 `192.168.1.10`，并在 TFTP 服务器提供：
+准备好以下两个文件，并放到同一个 TFTP 文件夹，例如：
 
 ```text
-openwrt-airoha-an7581-gemtek_w1700k-ubi-chainload-uboot.itb
+C:\tftp\
+├── openwrt-airoha-an7581-gemtek_w1700k-ubi-chainload-uboot.itb
+└── openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 ```
 
-进入 W1700K 的 UART 控制台，执行：
+---
+
+## 2. USB-TTL 接线
+
+**W1700K 网口朝向自己时，UART 从左到右：**
+
+```text
+1    2     3     4     5
+TX   GND   VCC   N/A   RX
+```
+
+连接 USB-TTL：
+
+```text
+W1700K TX  → TTL RX
+W1700K GND → TTL GND
+W1700K RX  → TTL TX
+```
+
+**VCC 不要连接。**
+
+> 必须使用 3.3V TTL，不能使用 RS-232。
+> TX/RX 需要交叉连接。
+
+---
+
+## 3. PuTTY 设置
+
+插入 USB-TTL 后，在 Windows「设备管理器 → 端口」查看 COM 端口。
+
+PuTTY 选择：
+
+```text
+Connection type: Serial
+Serial line: COMx
+Speed: 115200
+```
+
+Serial 设置：
+
+```text
+Data bits: 8
+Stop bits: 1
+Parity: None
+Flow control: None
+```
+
+打开串口后再给 W1700K 通电。
+
+---
+
+## 4. 设置电脑 IP
+
+电脑通过**网线直接连接 W1700K LAN 口**。
+
+将 Windows 有线网卡 IPv4 设置为：
+
+```text
+IP address:   192.168.1.10
+Subnet mask:  255.255.255.0
+Gateway:      留空
+DNS:          留空
+```
+
+刷机过程中建议暂时关闭 Wi-Fi、VPN 和其它虚拟网卡。
+
+---
+
+## 5. Tftpd64 设置
+
+打开 Tftpd64：
+
+```text
+Current Directory:
+C:\tftp
+```
+
+`Server interfaces` 选择：
+
+```text
+192.168.1.10
+```
+
+不要选择 `127.0.0.1` 或其它网卡。
+
+如果 Windows 防火墙弹出提示，请允许 Tftpd64 通过**专用网络**。
+
+---
+
+## 6. 刷写 U-Boot Chainloader
+
+给 W1700K 通电。
+
+PuTTY 应该开始出现类似：
+
+```text
+U-Boot ...
+...
+Hit any key to stop autoboot:
+```
+
+看到：
+
+```text
+Hit any key to stop autoboot
+```
+
+的时候，马上按几下 Enter 或空格。
+
+最终应该停在类似：
+
+```text
+U-Boot>
+```
+
+复制以下命令行执行：
 
 ```text
 setenv serverip 192.168.1.10 ; setenv ipaddr 192.168.1.1 ; tftpboot 0x89000000 openwrt-airoha-an7581-gemtek_w1700k-ubi-chainload-uboot.itb
@@ -31,65 +151,81 @@ flash write 0x600000 0x100000 0x89000000
 reset
 ```
 
-设备重启后进入 **U-Boot Chainloader**。
+重启后应进入 U-Boot 菜单。
 
-### 2. 加载 UBI Installer
+---
 
-在 TFTP 服务器提供：
+## 7. 启动 UBI Installer
+
+确认 Tftpd64 中仍然存在：
 
 ```text
 openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 ```
 
-设备重启进入 Chainloader 后，在启动菜单选择：
+在 U-Boot 菜单选择：
 
 ```text
-4. Boot installer via TFTP.
+4. Boot installer via TFTP
 ```
 
-### 3. 运行 Installer
+Installer 启动后，根据提示操作。
 
-若检测到已有 UBI 布局，Installer 会询问：
+如果提示已有 UBI 布局并询问是否覆盖：
 
 ```text
-Existing UBI layout detected. Proceed and overwrite? (yes/no)
+Existing UBI layout detected.
+Proceed and overwrite? (yes/no)
 ```
 
-确认重新安装请输入 `yes`（将格式化设备并覆盖现有数据），否则输入 `no`。
+如果确认要重新安装，输入：
 
-### 4. 等待安装完成
+```text
+yes
+```
 
-Installer 会自动完成 UBI 迁移并安装初始 OpenWrt，无需其它操作。安装完成并成功启动后，即可升级到自选的 W1700K 固件。
+然后等待 Installer 完成。
 
-## 固件
+> ⚠️ Installer 执行 NAND/UBI 操作时可能会出现一段时间没有输出。
+> **不要因为暂时没有输出就立即断电。**
 
-日常升级固件**无需再次运行 Installer**，进入系统后直接使用固件自带升级方式（如 `sysupgrade`）即可。
+---
 
-提供两个系列固件（均含 `ubi2` 常规版与 `ubi2-oc` 超频版）：
+## 8. 常见问题
 
-| 固件 | 仓库 |
-| --- | --- |
-| OpenWrt | [w1700k-openwrt](https://github.com/yahuisme/w1700k-openwrt) |
-| ImmortalWrt | [w1700k-immortalwrt](https://github.com/yahuisme/w1700k-immortalwrt) |
+### PuTTY 没有任何输出
 
-固件由 GitHub Actions 自动构建并发布在各仓库 Releases 页面，请确认下载的是适用于 W1700K 的 `ubi2` / `ubi2-oc` sysupgrade 镜像。
+检查：
 
-**内嵌初始固件：** `files/installer/` 下的 `openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb` 为 Installer 安装时写入的初始固件（当前为 2026.09.01 的 `ubi2` 构建 r36013）。如需让新安装设备直接获得最新固件，从上述任一仓库 Releases 下载对应 `ubi2` sysupgrade 镜像替换该文件，提交后重新运行构建工作流即可。
+* COM 端口是否正确
+* Baud rate 是否为 `115200`
+* Flow control 是否为 `None`
+* TX/RX 是否交叉连接
+* GND 是否连接
+* USB-TTL 是否为 3.3V TTL
 
-## 关于 Installer
+### TFTP 下载失败
 
-用于 W1700K 首次安装 OpenWrt、UBI 存储布局初始化/迁移、系统重装与设备恢复。已正常运行 UBI2/OpenWrt 的设备无需为升级而重新运行本 Installer。
+检查：
 
-## 上游项目
+```text
+PC IP          = 192.168.1.10
+Tftpd interface = 192.168.1.10
+Current Directory = 正确文件夹
+文件名          = 完全正确
+```
 
-* [dangowrt/owrt-ubi-installer](https://github.com/dangowrt/owrt-ubi-installer)
-* [hurrian/w1700k-ubi-installer](https://github.com/hurrian/w1700k-ubi-installer)
-* [w1700k/ubi2-installer](https://github.com/w1700k/ubi2-installer)
+同时检查 Windows 防火墙。
 
-## 免责声明
+### 菜单 4 后长时间没有明显变化
 
-刷写 U-Boot、修改 NAND/UBI 布局及安装固件均存在风险，请确保操作正确并了解相关风险。因操作错误、文件错误、断电等原因导致的设备损坏，由使用者自行承担。
+菜单 4 会先通过 TFTP 下载 Installer，然后才启动 Installer。
 
-## License
+可以观察 Tftpd64 是否收到文件请求，以及 PuTTY 是否继续输出日志。不要在没有确认失败之前断电。
 
-本项目遵循原项目所使用的开源许可证，详见仓库中的 `LICENSE` 文件。
+---
+
+## 9. 参考
+
+* [OpenWrt W1700K Device Page](https://openwrt.org/toh/gemtek/mxf-w1700k)
+* [W1700K UBI2 Installer](https://github.com/yahuisme/w1700k-ubi2-installer)
