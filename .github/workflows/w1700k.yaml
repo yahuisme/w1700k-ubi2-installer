@@ -27,6 +27,12 @@ jobs:
         with:
           path: installer-repo
 
+      - name: Fetch latest OpenWrt payload
+        id: payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 installer-repo/scripts/fetch-firmware.py installer-repo/files/installer
+
       - name: Install dependencies
         run: |
           sudo apt update
@@ -77,6 +83,11 @@ jobs:
           chmod +x \
             files/installer/install.sh \
             files/lib/preinit/00_installer
+          cmp ../installer-repo/files/installer/$SYSUPGRADE_IMAGE files/installer/$SYSUPGRADE_IMAGE
+          test -s "files/installer/$RECOVERY_IMAGE"
+          # Reject an invalid board image before packaging the installer.
+          staging_dir/host/bin/fwtool -i payload.json "files/installer/$SYSUPGRADE_IMAGE"
+          python3 -c 'import json; m=json.load(open("payload.json")); assert "gemtek,w1700k-ubi" in m.get("new_supported_devices", m["supported_devices"]); assert str(m.get("compat_version")) == "2.0"'
 
       - name: Prepare config (outer build)
         run: |
@@ -103,18 +114,6 @@ jobs:
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
 
-      - name: Remove previous installer releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
-            while IFS= read -r tag; do
-              if [[ "$tag" == ubi2-installer-* && "$tag" != "$current_tag" ]]; then
-                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
-              fi
-            done
-
       - name: Set release name
         id: release_meta
         run: echo "release_name=$(date -u +'%Y.%m.%d') - Installer for W1700K v2.0" >> "$GITHUB_OUTPUT"
@@ -131,9 +130,28 @@ jobs:
 
             **刷写设备前，请务必仔细阅读[安装说明](https://github.com/yahuisme/w1700k-ubi2-installer/blob/main/README.md)。**
 
-            本项目基于 [hurrian 的 ubi-installer](https://github.com/hurrian/w1700k-ubi-installer)，并注入了自定义的 sysupgrade 固件，适用于 Gemtek W1700K。
+            本项目基于 [hurrian 的 ubi-installer](https://github.com/hurrian/w1700k-ubi-installer)，内置 [w1700k-openwrt](https://github.com/yahuisme/w1700k-openwrt/releases) 构建启动时的最新标准版固件。
+
+            - 固件版本：`${{ steps.payload.outputs.tag }}`
+            - 固件 SHA-256：`${{ steps.payload.outputs.sha256 }}`
           files: |
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
           overwrite_files: true
           fail_on_unmatched_files: true
+
+      - name: Remove previous installer releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
+          # Keep the previous installer until the new release and both assets exist.
+          gh release view "$current_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
+          grep -qxF "$INSTALLER_IMAGE" release-assets.txt
+          grep -qxF "$UBOOT_IMAGE" release-assets.txt
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
+            while IFS= read -r tag; do
+              if [[ "$tag" == ubi2-installer-* && "$tag" != "$current_tag" ]]; then
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+              fi
+            done

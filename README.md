@@ -1,10 +1,16 @@
 # W1700K UBI Installer
 
-用于 Gemtek W1700K 安装 OpenWrt UBI2。
+用于 Gemtek W1700K 初始化 UBI2 布局并安装 OpenWrt。构建时自动获取 [w1700k-openwrt 最新标准版](https://github.com/yahuisme/w1700k-openwrt/releases/latest)，校验文件大小及 SHA-256 后嵌入 Installer；实际内置版本与校验值见安装器 Release。
+
+已使用兼容 UBI2 布局、仅需更新系统的设备，应使用 sysupgrade 固件，不要重复运行 Installer。
+
+从[本仓库 Release](https://github.com/yahuisme/w1700k-ubi2-installer/releases/latest)下载同一次发布的 Installer 和 Chainloader。不要将 sysupgrade.itb 重命名为 Installer。
 
 > ⚠️ 刷写 U-Boot / NAND 存储存在变砖风险，请确认设备型号和固件正确。刷写过程中不要断电。
 
 ## 1. 准备
+
+先按设备当前分区布局备份原厂分区及设备唯一数据，并保存到电脑。已有 UBI 布局还需备份现有 factory 卷。Installer 自动生成的 factory.bin 不能替代离机备份；不要跨布局照抄 mtd 编号。
 
 需要：
 
@@ -76,7 +82,7 @@ Flow control: None
 
 ## 4. 设置电脑 IP
 
-电脑通过**网线直接连接 W1700K LAN 口**。
+电脑通过**网线直接连接 W1700K 黄色 1G LAN 口**。
 
 将 Windows 有线网卡 IPv4 设置为：
 
@@ -138,10 +144,16 @@ Hit any key to stop autoboot
 U-Boot>
 ```
 
-复制以下命令行执行：
+先执行下载命令：
 
 ```text
 setenv serverip 192.168.1.10 ; setenv ipaddr 192.168.1.1 ; tftpboot 0x89000000 openwrt-airoha-an7581-gemtek_w1700k-ubi-chainload-uboot.itb
+```
+
+确认 TFTP 下载成功、文件完整加载到 `0x89000000`，且大小不超过 `0x100000` 字节，再逐行执行下面的命令。下载超时或失败时，禁止继续擦写。保存当前串口日志和原始 bootcmd；这些命令仅用于原厂 U-Boot，不用于 Linux shell 或其他设备。
+
+```text
+setenv bootcmd_orig "$bootcmd"
 setenv one flash read 0x600000 0x100000 \$loadaddr
 setenv two "; bootm"
 setenv bootcmd "$one$two"
@@ -169,22 +181,23 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 4. Boot installer via TFTP
 ```
 
-Installer 启动后，根据提示操作。
+选择此项会下载并启动 Installer，进入自动安装流程。首次未检测到 UBI 时不会再询问确认，务必提前完成备份。
 
 如果提示已有 UBI 布局并询问是否覆盖：
 
 ```text
-Existing UBI layout detected.
-Proceed and overwrite? (yes/no)
+Existing UBI layout detected. Proceed and overwrite? (yes/no)
 ```
 
-如果确认要重新安装，输入：
+输入 `yes` 将格式化 UBI 分区，重建环境、factory、恢复系统和固件卷，清除原有系统与配置；现有 factory 卷不会直接保留，而是从原始 vendor 数据重新生成。仅在原始数据完整、已完成离机备份且明确需要重新初始化时输入：
 
 ```text
 yes
 ```
 
-然后等待 Installer 完成。
+否则输入 `no` 取消，普通升级使用 sysupgrade。
+
+等待出现 `[installer] Install complete. Rebooting...` 并自动重启。该安装器已写入内置 sysupgrade 固件，不需要再重复刷一次。若出现 `ERROR` 或命令失败，保留完整串口日志，不要继续手工擦写。
 
 > ⚠️ Installer 执行 NAND/UBI 操作时可能会出现一段时间没有输出。
 > **不要因为暂时没有输出就立即断电。**
