@@ -191,21 +191,11 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 Initialize/reinstall UBI2 on mtd2 and erase its contents? (yes/no)
 ```
 
-输入 `yes` 将格式化 UBI 分区，重建环境、factory、恢复系统和固件卷，清除原有系统与配置；现有 factory 卷不会直接保留，而是从原始 vendor 数据重新生成。仅在原始数据完整、已完成离机备份且明确需要重新初始化时输入：
+**安装会清除原有系统与配置，请先完成备份。**输入 `yes` 开始，输入 `no` 取消。
 
-```text
-yes
-```
+等待出现 `[installer] Install complete. Rebooting...` 并自动重启，即可使用已安装的 OpenWrt，无需再刷一次固件。
 
-否则输入 `no` 或遇到输入 EOF 都会取消，普通升级使用 sysupgrade。
-
-布局校验针对本次启动的 Installer DTS，不要求旧系统采用 UBI2，也不要求旧 UBI 能附加或卷完整。`ubinfo` 失败只显示状态未知，不跳过覆盖确认；确认后 `ubiformat -y` 不再额外询问。因此原厂迁移、UBI 损坏/未附加、factory/fit 等卷缺失均可进入重建流程。原始 vendor 中的设备数据必须仍可读取并通过校验；如果这些数据确实损坏，必须停止并使用**本设备原有备份**恢复，不能无备份重建无线校准数据。
-
-等待出现 `[installer] Install complete. Rebooting...` 并自动重启。该安装器已写入内置 sysupgrade 固件，不需要再重复刷一次。
-
-Installer 擦写前校验分区布局和原厂数据，写入后回读校验 factory、recovery 和固件，再同步并重启。失败会显示阶段与退出码，请保留完整串口日志。
-
-取消、安装失败或重启未生效时，停留在串口诊断 shell，不自动重刷，也不继续启动网络。出现命令行不代表安装成功；独立上电后正常进入新系统，才确认持久启动成功。
+若报错或未自动重启，请保留完整串口日志，不要盲目重复刷写。进入命令行不代表安装完成。若提示原厂数据损坏，需使用本设备原有备份恢复。
 
 > ⚠️ Installer 执行 NAND/UBI 操作时可能会出现一段时间没有输出。
 > **不要因为暂时没有输出就立即断电。**
