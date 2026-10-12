@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout installer repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v7
         with:
           path: installer-repo
 
@@ -42,7 +42,7 @@ jobs:
             python3-setuptools rsync swig unzip zlib1g-dev file wget curl
 
       - name: Checkout OpenWrt repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.REMOTE_REPOSITORY }}
           ref: ${{ env.REMOTE_BRANCH }}
@@ -83,11 +83,11 @@ jobs:
           chmod +x \
             files/installer/install.sh \
             files/lib/preinit/00_installer
-          cmp ../installer-repo/files/installer/$SYSUPGRADE_IMAGE files/installer/$SYSUPGRADE_IMAGE
+          cmp "../installer-repo/files/installer/$SYSUPGRADE_IMAGE" "files/installer/$SYSUPGRADE_IMAGE"
           test -s "files/installer/$RECOVERY_IMAGE"
           # Reject an invalid board image before packaging the installer.
           staging_dir/host/bin/fwtool -i payload.json "files/installer/$SYSUPGRADE_IMAGE"
-          python3 -c 'import json; m=json.load(open("payload.json")); assert "gemtek,w1700k-ubi" in m.get("new_supported_devices", m["supported_devices"]); assert str(m.get("compat_version")) == "2.0"'
+          python3 -c 'import json; m=json.load(open("payload.json")); assert "gemtek,w1700k-ubi" in m.get("new_supported_devices", m.get("supported_devices", [])); assert str(m.get("compat_version")) == "2.0"; assert m["version"]["target"] == "airoha/an7581"; assert m["version"]["board"] == "gemtek_w1700k-ubi"'
 
       - name: Prepare config (outer build)
         run: |
@@ -106,20 +106,12 @@ jobs:
           cp "openwrt/bin/targets/${{ env.TARGET_SUBTARGET }}/${{ env.RECOVERY_IMAGE }}" "output/installer/${{ env.INSTALLER_IMAGE }}"
           cp "openwrt/bin/targets/${{ env.TARGET_SUBTARGET }}/${{ env.UBOOT_IMAGE }}" "output/installer/"
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: w1700k-installer
-          path: |
-            output/installer/${{ env.INSTALLER_IMAGE }}
-            output/installer/${{ env.UBOOT_IMAGE }}
-
       - name: Set release name
         id: release_meta
         run: echo "release_name=$(date -u +'%Y.%m.%d') - Installer for W1700K v2.0" >> "$GITHUB_OUTPUT"
 
       - name: Create new GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           target_commitish: ${{ github.sha }}
@@ -145,10 +137,8 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
-          # Keep the previous installer until the new release and both assets exist.
-          gh release view "$current_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
-          grep -qxF "$INSTALLER_IMAGE" release-assets.txt
-          grep -qxF "$UBOOT_IMAGE" release-assets.txt
+          # Confirm publication and uploaded bytes before deleting the previous release.
+          python3 installer-repo/scripts/verify-release.py output/installer
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
             while IFS= read -r tag; do
               if [[ "$tag" == ubi2-installer-* && "$tag" != "$current_tag" ]]; then
