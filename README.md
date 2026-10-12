@@ -191,7 +191,9 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 Initialize/reinstall UBI2 on mtd2 and erase its contents? (yes/no)
 ```
 
-**安装会清除原有系统与配置，请先完成备份。**输入 `yes` 开始，输入 `no` 取消。
+**安装会清除原有系统与配置，请先完成备份。**
+
+输入 `yes` 开始，输入 `no` 取消。
 
 等待出现 `[installer] Install complete. Rebooting...` 并自动重启，即可使用已安装的 OpenWrt，无需再刷一次固件。
 
