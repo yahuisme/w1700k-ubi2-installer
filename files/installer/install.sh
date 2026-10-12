@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 
+STAGE="preflight"
+trap 'rc=$?; trap - EXIT; if [ "$rc" -ne 0 ]; then printf "[installer] ERROR: stage=%s exit=%s. Stop; preserve the serial log.\n" "$STAGE" "$rc" >&2; fi; exit "$rc"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+stage() { STAGE="$*"; log "Stage: $STAGE"; }
+
 INSTALLER_DIR="/installer"
 RECOVERY_IMAGE="${INSTALLER_DIR}/openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-recovery.itb"
 SYSUPGRADE_IMAGE="${INSTALLER_DIR}/openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb"
@@ -27,6 +33,9 @@ log() {
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
+  if [ "$STAGE" = "read factory data" ]; then
+    printf '[installer] Factory data could not be validated. If damaged, recovery requires an original backup from this device; calibration cannot be recreated without it.\n' >&2
+  fi
   exit 1
 }
 
@@ -34,14 +43,36 @@ require_file() {
   if [ ! -f "$1" ]; then
     die "Missing required file: $1"
   fi
+  [ -s "$1" ] || die "Empty required file: $1"
 }
 
-already_partitioned() {
-  ubinfo /dev/ubi0 >/dev/null 2>&1
+check_mtd() {
+  local node="/sys/class/mtd/$1"
+  [ "$(cat "$node/name")" = "$2" ] &&
+    [ "$(cat "$node/size")" -eq "$3" ] &&
+    [ "$(cat "$node/offset")" -eq "$4" ] || die "Unsupported MTD layout: $1"
+}
+
+validate_layout() {
+  # OpenWrt target/linux/airoha/dts/an7581-w1700k-ubi.dts.
+  # Validate the running installer DT, not existing UBI volume health.
+  tr '\000' '\n' < /proc/device-tree/compatible | grep -qx 'gemtek,w1700k-ubi' || die "Unsupported board"
+  check_mtd mtd0 vendor $((0x600000)) 0
+  check_mtd mtd1 chainloader $((0x100000)) $((0x600000))
+  check_mtd mtd2 ubi $((0x1b700000)) $((0x700000))
+  if [ -d /sys/class/ubi/ubi0 ]; then
+    [ "$(cat /sys/class/ubi/ubi0/mtd_num)" = 2 ] || die "ubi0 is not attached to mtd2"
+  fi
 }
 
 prompt_confirm() {
-  printf 'Existing UBI layout detected. Proceed and overwrite? (yes/no)\n'
+  # A failed ubinfo probe cannot distinguish first install from damaged UBI.
+  if ubinfo /dev/ubi0 >/dev/null 2>&1; then
+    log "Existing UBI layout detected."
+  else
+    log "UBI is absent, unattached or unreadable; existing data may remain."
+  fi
+  printf 'Initialize/reinstall UBI2 on mtd2 and erase its contents? (yes/no)\n'
   read -r answer
   [ "$answer" = "yes" ]
 }
@@ -95,11 +126,14 @@ get_factory_eeprom() {
   [ -d "$FACTORY_TMP" ] || mkdir -p "$FACTORY_TMP"
 
   ebs="$(cat /sys/class/mtd/$(basename /dev/mtd0)/erasesize)"
+  case "$ebs" in ""|*[!0-9]*) die "Invalid erase size";; esac
+  [ "$ebs" -gt 0 ] || die "Invalid erase size"
+  [ $((init_off + 3 * ebs + eeprom_len)) -le $((0x600000)) ] || die "EEPROM search exceeds vendor boundary"
   off="$init_off"
   skip="$((init_off / ebs))"
 
   while [ $((off)) -lt $((init_off + 4 * ebs)) ]; do
-    magic_read="$(hexdump -v -s "$off" -n 2 -e '"%02x"' /dev/mtd0)"
+    magic_read="$(hexdump -v -s "$off" -n 2 -e '1/1 "%02x"' /dev/mtd0)"
     if [ "$magic_read" = "$magic" ]; then
       found=1
       break
@@ -123,6 +157,7 @@ get_factory_macs() {
   [ -d "$FACTORY_TMP" ] || mkdir -p "$FACTORY_TMP"
 
   dd if=/dev/mtd0 of="$DSD_BIN" bs=1 skip="$dsd_off" count="$dsd_len" 2>/dev/null
+  [ "$(wc -c < "$DSD_BIN")" -eq "$dsd_len" ] || die "DSD length mismatch"
   strings "$DSD_BIN" > "$DSD_STR"
 
   WAN_MAC="$(get_dsd_value wan_mac "$DSD_STR")"
@@ -163,6 +198,9 @@ build_factory_volume() {
   log "  serial_number = $SERIAL_NUMBER"
 
   eeprom_size="$(wc -c < "$eeprom_bin")"
+  [ "$eeprom_size" -eq "$EEPROM_LEN" ] || die "EEPROM length must be $EEPROM_LEN bytes"
+  # MT7996 chip ID 0x7990 is stored little-endian: bytes 90 79.
+  [ "$(hexdump -v -n 2 -e '1/1 "%02x"' "$eeprom_bin")" = "9079" ] || die "EEPROM magic mismatch"
 
   log "Creating empty factory blob (${FACTORY_SIZE} bytes)..."
   dd if=/dev/zero of="$FACTORY_BLOB" bs=1 count="$FACTORY_SIZE" 2>/dev/null
@@ -192,7 +230,8 @@ install_prepare_ubi() {
   log "Formatting NAND and creating UBI volumes on $mtddev..."
   [ -e /sys/class/ubi/ubi0 ] && ubidetach -p "$mtddev"
 
-  ubiformat "$mtddev"
+  # The installer already obtained explicit consent, including damaged UBI.
+  ubiformat "$mtddev" -y
   ubiattach -p "$mtddev"
   sync
   sleep 1
@@ -205,12 +244,24 @@ install_prepare_ubi() {
   ubi_mknod ubi0_1
 }
 
+verify_volume() {
+  local image="$1" dev="$2" length
+  length="$(wc -c < "$image")"
+  [ "$length" -gt 0 ] || die "Empty image: $image"
+  log "Readback verification: $dev ($length bytes)"
+  # Dynamic UBI volumes are LEB-rounded; compare only the written bytes.
+  head -c "$length" "$dev" > "$FACTORY_TMP/readback.bin"
+  cmp -s "$image" "$FACTORY_TMP/readback.bin" || die "UBI readback mismatch: $dev"
+  rm -f "$FACTORY_TMP/readback.bin"
+}
+
 install_write_factory() {
   local factory_bin_path="$1"
 
   ubimkvol /dev/ubi0 -n 2 -t static -s "$(wc -c < "$factory_bin_path")" -N factory
   ubi_mknod ubi0_2
   ubiupdatevol /dev/ubi0_2 "$factory_bin_path"
+  verify_volume "$factory_bin_path" /dev/ubi0_2
   sync
   sleep 1
 }
@@ -221,6 +272,7 @@ install_write_recovery() {
   ubimkvol /dev/ubi0 -n 3 -s "$(wc -c < "$recovery_image")" -N recovery
   ubi_mknod ubi0_3
   ubiupdatevol /dev/ubi0_3 "$recovery_image"
+  verify_volume "$recovery_image" /dev/ubi0_3
   sync
   sleep 1
 }
@@ -239,32 +291,46 @@ install_write_openwrt() {
 
   log "Installing sysupgrade image via nand_upgrade_fit..."
   nand_upgrade_fit "$1" cat
+  local fit_volume
+  fit_volume="$(nand_find_volume ubi0 fit)"
+  [ -n "$fit_volume" ] || die "FIT volume missing after upgrade"
+  verify_volume "$1" "/dev/$fit_volume"
 }
 
+stage "validate layout"
+validate_layout
 require_file "$RECOVERY_IMAGE"
 require_file "$SYSUPGRADE_IMAGE"
 
-if already_partitioned; then
-  if ! prompt_confirm; then
-    log "User aborted."
-    exit 0
-  fi
+if ! prompt_confirm; then
+  log "User aborted."
+  exit 0
 fi
 
+stage "read factory data"
 log "Generating factory.bin on device..."
-get_factory_eeprom "$EEPROM_ABS_OFF" "$EEPROM_LEN" "7990" "$EEPROM_DUMP"
+get_factory_eeprom "$EEPROM_ABS_OFF" "$EEPROM_LEN" "9079" "$EEPROM_DUMP"
 get_factory_macs "$DSD_OFF" "$DSD_LEN"
 build_factory_volume "$EEPROM_DUMP" "$FACTORY_BIN"
 require_file "$FACTORY_BIN"
 
+stage "prepare UBI"
 install_prepare_ubi /dev/mtd2
+stage "write factory"
 install_write_factory "$FACTORY_BIN"
+stage "write recovery"
 install_write_recovery "$RECOVERY_IMAGE"
+stage "write fit"
 install_write_openwrt "$SYSUPGRADE_IMAGE"
 
+stage "final sync"
+log "Sync starting; do not power off."
 sync
+log "Sync complete; all three images passed readback verification."
 sleep 5
 
 log "Install complete. Rebooting..."
-
+stage "reboot"
 reboot
+sleep 5
+die "reboot returned but the system is still running; no automatic retry or reflash"

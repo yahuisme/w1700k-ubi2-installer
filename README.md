@@ -120,6 +120,8 @@ C:\tftp
 
 ## 6. 刷写 U-Boot Chainloader
 
+本节仅用于原厂 U-Boot。救砖时若已能进入带有 `4. Boot installer via TFTP` 的 U-Boot 菜单，请跳过本节，直接按第 7 节启动 Installer；不要重复写入 Chainloader，也不要在新 U-Boot 中执行本节命令。
+
 给 W1700K 通电。
 
 PuTTY 应该开始出现类似：
@@ -181,12 +183,10 @@ openwrt-airoha-an7581-gemtek_w1700k-ubi-initramfs-installer.itb
 4. Boot installer via TFTP
 ```
 
-选择此项会下载并启动 Installer，进入自动安装流程。首次未检测到 UBI 时不会再询问确认，务必提前完成备份。
-
-如果提示已有 UBI 布局并询问是否覆盖：
+选择此项会下载并启动 Installer。首次刷写 U-Boot 后初始化与 TTL 救砖重装使用同一流程，均需在串口确认：
 
 ```text
-Existing UBI layout detected. Proceed and overwrite? (yes/no)
+Initialize/reinstall UBI2 on mtd2 and erase its contents? (yes/no)
 ```
 
 输入 `yes` 将格式化 UBI 分区，重建环境、factory、恢复系统和固件卷，清除原有系统与配置；现有 factory 卷不会直接保留，而是从原始 vendor 数据重新生成。仅在原始数据完整、已完成离机备份且明确需要重新初始化时输入：
@@ -195,9 +195,15 @@ Existing UBI layout detected. Proceed and overwrite? (yes/no)
 yes
 ```
 
-否则输入 `no` 取消，普通升级使用 sysupgrade。
+否则输入 `no` 或遇到输入 EOF 都会取消，普通升级使用 sysupgrade。
 
-等待出现 `[installer] Install complete. Rebooting...` 并自动重启。该安装器已写入内置 sysupgrade 固件，不需要再重复刷一次。若出现 `ERROR` 或命令失败，保留完整串口日志，不要继续手工擦写。
+布局校验针对本次启动的 Installer DTS，不要求旧系统采用 UBI2，也不要求旧 UBI 能附加或卷完整。`ubinfo` 失败只显示状态未知，不跳过覆盖确认；确认后 `ubiformat -y` 不再额外询问。因此原厂迁移、UBI 损坏/未附加、factory/fit 等卷缺失均可进入重建流程。原始 vendor 中的设备数据必须仍可读取并通过校验；如果这些数据确实损坏，必须停止并使用**本设备原有备份**恢复，不能无备份重建无线校准数据。
+
+等待出现 `[installer] Install complete. Rebooting...` 并自动重启。该安装器已写入内置 sysupgrade 固件，不需要再重复刷一次。
+
+Installer 擦写前校验分区布局和原厂数据，写入后回读校验 factory、recovery 和固件，再同步并重启。失败会显示阶段与退出码，请保留完整串口日志。
+
+取消、安装失败或重启未生效时，停留在串口诊断 shell，不自动重刷，也不继续启动网络。出现命令行不代表安装成功；独立上电后正常进入新系统，才确认持久启动成功。
 
 > ⚠️ Installer 执行 NAND/UBI 操作时可能会出现一段时间没有输出。
 > **不要因为暂时没有输出就立即断电。**
