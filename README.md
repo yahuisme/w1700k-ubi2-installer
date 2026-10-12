@@ -120,7 +120,9 @@ C:\tftp
 
 ## 6. 刷写 U-Boot Chainloader
 
-本节仅用于原厂 U-Boot。救砖时若已能进入带有 `4. Boot installer via TFTP` 的 U-Boot 菜单，请跳过本节，直接按第 7 节启动 Installer；不要重复写入 Chainloader，也不要在新 U-Boot 中执行本节命令。
+**救砖时若已能进入带有 `4. Boot installer via TFTP` 的 U-Boot 菜单，无需重复写入 Chainloader，请跳过本节，直接按第 7 节启动 Installer。**
+
+**本节命令仅适用于原厂 U-Boot。确需重新写入 Chainloader 时，应使用当前 U-Boot 对应的方法，不可直接套用本节命令。**
 
 给 W1700K 通电。
 
