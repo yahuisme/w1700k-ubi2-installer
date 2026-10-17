@@ -5,6 +5,9 @@ permissions:
 
 on:
   workflow_dispatch:
+  schedule:
+    # Sunday 00:00 Hong Kong time (UTC+8)
+    - cron: '0 16 * * 6'
 
 env:
   REMOTE_REPOSITORY: w1700k/installer-repo
