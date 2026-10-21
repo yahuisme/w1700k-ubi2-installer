@@ -11,6 +11,7 @@ import tempfile
 
 REPOSITORY = 'yahuisme/w1700k-openwrt'
 IMAGE = 'openwrt-airoha-an7581-gemtek_w1700k-ubi-squashfs-sysupgrade.itb'
+HASH_CHUNK_SIZE = 1024 * 1024
 
 
 def select_asset(release):
@@ -34,16 +35,24 @@ def select_asset(release):
 
 
 def verify_file(path, asset):
-    data = path.read_bytes()
-    if len(data) != asset['size']:
+    digest = hashlib.sha256()
+    size = 0
+    with path.open('rb') as source:
+        while chunk := source.read(HASH_CHUNK_SIZE):
+            digest.update(chunk)
+            size += len(chunk)
+    if size != asset['size']:
         raise ValueError('Image size mismatch')
-    if 'sha256:' + hashlib.sha256(data).hexdigest() != asset['digest']:
+    if 'sha256:' + digest.hexdigest() != asset['digest']:
         raise ValueError('Image SHA-256 mismatch')
-    if data[:4] != bytes.fromhex('d00dfeed'):
-        raise ValueError('Image is not FIT')
+    with path.open('rb') as source:
+        if source.read(4) != bytes.fromhex('d00dfeed'):
+            raise ValueError('Image is not FIT')
 
 
 def main():
+    if len(sys.argv) != 2:
+        raise SystemExit(f'usage: {sys.argv[0]} DESTINATION')
     destination = Path(sys.argv[1])
     release = json.loads(subprocess.check_output(
         ['gh', 'api', f'repos/{REPOSITORY}/releases/latest']))
@@ -53,7 +62,9 @@ def main():
     os.close(fd)
     temporary = Path(temporary)
     try:
-        subprocess.run(['curl', '--fail', '--location', '--retry', '3',
+        subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error',
+                        '--retry', '3', '--retry-delay', '2',
+                        '--connect-timeout', '15', '--max-time', '900',
                         '--proto', '=https', '--proto-redir', '=https',
                         '--output', str(temporary), asset['browser_download_url']], check=True)
         verify_file(temporary, asset)

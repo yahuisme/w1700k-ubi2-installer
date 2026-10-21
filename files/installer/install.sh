@@ -1,6 +1,9 @@
 #!/bin/sh
+# OpenWrt /bin/sh is BusyBox ash; local variables are intentional.
+# shellcheck disable=SC3043
 set -e
 
+rc=0
 STAGE="preflight"
 trap 'rc=$?; trap - EXIT; if [ "$rc" -ne 0 ]; then printf "[installer] ERROR: stage=%s exit=%s. Stop; preserve the serial log.\n" "$STAGE" "$rc" >&2; fi; exit "$rc"' EXIT
 trap 'exit 130' INT
@@ -48,9 +51,16 @@ require_file() {
 
 check_mtd() {
   local node="/sys/class/mtd/$1"
-  [ "$(cat "$node/name")" = "$2" ] &&
-    [ "$(cat "$node/size")" -eq "$3" ] &&
-    [ "$(cat "$node/offset")" -eq "$4" ] || die "Unsupported MTD layout: $1"
+
+  if [ "$(cat "$node/name")" != "$2" ]; then
+    die "Unsupported MTD layout: $1"
+  fi
+  if [ "$(cat "$node/size")" -ne "$3" ]; then
+    die "Unsupported MTD layout: $1"
+  fi
+  if [ "$(cat "$node/offset")" -ne "$4" ]; then
+    die "Unsupported MTD layout: $1"
+  fi
 }
 
 validate_layout() {
@@ -85,8 +95,10 @@ ubi_mknod() {
   [ -e "/dev/$dev" ] && return 0
 
   [ -e "/sys/class/ubi/$dev/uevent" ] || return 2
-  source "/sys/class/ubi/$dev/uevent"
-  mknod "/dev/$dev" c $MAJOR $MINOR
+  # Runtime UBI uevent files are device-provided and cannot be statically followed.
+  # shellcheck disable=SC1090
+  . "/sys/class/ubi/$dev/uevent"
+  mknod "/dev/$dev" c "$MAJOR" "$MINOR"
 }
 
 mac_valid() {
@@ -120,17 +132,15 @@ get_factory_eeprom() {
   local eeprom_dump="$4"
   local ebs
   local off
-  local skip
   local found
 
   [ -d "$FACTORY_TMP" ] || mkdir -p "$FACTORY_TMP"
 
-  ebs="$(cat /sys/class/mtd/$(basename /dev/mtd0)/erasesize)"
+  ebs="$(cat "/sys/class/mtd/$(basename /dev/mtd0)/erasesize")"
   case "$ebs" in ""|*[!0-9]*) die "Invalid erase size";; esac
   [ "$ebs" -gt 0 ] || die "Invalid erase size"
   [ $((init_off + 3 * ebs + eeprom_len)) -le $((0x600000)) ] || die "EEPROM search exceeds vendor boundary"
   off="$init_off"
-  skip="$((init_off / ebs))"
 
   while [ $((off)) -lt $((init_off + 4 * ebs)) ]; do
     magic_read="$(hexdump -v -s "$off" -n 2 -e '1/1 "%02x"' /dev/mtd0)"
@@ -139,7 +149,6 @@ get_factory_eeprom() {
       break
     fi
     off=$((off + ebs))
-    skip=$((skip + 1))
   done
 
   if [ "$found" != "1" ]; then
@@ -205,7 +214,7 @@ build_factory_volume() {
   log "Creating empty factory blob (${FACTORY_SIZE} bytes)..."
   dd if=/dev/zero of="$FACTORY_BLOB" bs=1 count="$FACTORY_SIZE" 2>/dev/null
 
-  log "Copying EEPROM (len 0x$(printf %x $eeprom_size)) -> blob @0x0..."
+  log "Copying EEPROM (len 0x$(printf %x "$eeprom_size")) -> blob @0x0..."
   dd if="$eeprom_bin" of="$FACTORY_BLOB" bs=1 seek="$EEPROM_DST_OFF" count="$eeprom_size" conv=notrunc 2>/dev/null
 
   log "Writing WAN/LAN MACs as hex bytes..."
@@ -267,7 +276,7 @@ install_write_factory() {
 }
 
 install_write_recovery() {
-  recovery_image="$1"
+  local recovery_image="$1"
 
   ubimkvol /dev/ubi0 -n 3 -s "$(wc -c < "$recovery_image")" -N recovery
   ubi_mknod ubi0_3

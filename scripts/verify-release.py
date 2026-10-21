@@ -17,9 +17,12 @@ def verify(release, directory, names):
         raise ValueError('Unexpected installer asset set')
     for asset in assets:
         local = directory / asset['name']
-        digest = 'sha256:' + hashlib.sha256(local.read_bytes()).hexdigest()
+        if not local.is_file():
+            raise ValueError('Missing local installer asset')
         if asset.get('state') != 'uploaded' or asset['size'] != local.stat().st_size or not asset['size']:
             raise ValueError('Incomplete installer upload')
+        with local.open('rb') as source:
+            digest = 'sha256:' + hashlib.file_digest(source, 'sha256').hexdigest()
         if asset.get('digest'):
             if asset['digest'] != digest:
                 raise ValueError('Uploaded installer digest mismatch')

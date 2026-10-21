@@ -1,7 +1,7 @@
 name: W1700k UBI Installer (ARM) w custom payload
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout installer repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: installer-repo
 
@@ -41,18 +41,25 @@ jobs:
           sudo apt update
           sudo apt install -y \
             build-essential clang flex bison g++ gawk \
-            gcc g++ gettext git libncurses5-dev libssl-dev \
+            gcc gettext git libncurses5-dev libssl-dev \
             python3-setuptools rsync swig unzip zlib1g-dev file wget curl
 
       - name: Checkout OpenWrt repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ env.REMOTE_REPOSITORY }}
           ref: ${{ env.REMOTE_BRANCH }}
           path: openwrt
           fetch-depth: 0
 
-      - name: Use Github feeds
+      - name: Record OpenWrt source revision
+        id: source_meta
+        run: |
+          remote_sha="$(git -C openwrt rev-parse HEAD)"
+          echo "REMOTE_SHA=$remote_sha" >> "$GITHUB_ENV"
+          echo "remote_sha=$remote_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Use GitHub feeds
         run: |
           cd openwrt
           sed -i \
@@ -75,7 +82,7 @@ jobs:
       - name: Build OpenWrt images (inner build)
         run: |
           cd openwrt
-          make -j"$(nproc)" defconfig download world
+          make -j"$(nproc)" download world
 
       - name: Stage installer assets and add installer files (outer build only)
         run: |
@@ -108,13 +115,15 @@ jobs:
           mkdir -p output/installer
           cp "openwrt/bin/targets/${{ env.TARGET_SUBTARGET }}/${{ env.RECOVERY_IMAGE }}" "output/installer/${{ env.INSTALLER_IMAGE }}"
           cp "openwrt/bin/targets/${{ env.TARGET_SUBTARGET }}/${{ env.UBOOT_IMAGE }}" "output/installer/"
+          test -s "output/installer/${{ env.INSTALLER_IMAGE }}"
+          test -s "output/installer/${{ env.UBOOT_IMAGE }}"
 
       - name: Set release name
         id: release_meta
         run: echo "release_name=$(date -u +'%Y.%m.%d') - Installer for W1700K v2.0" >> "$GITHUB_OUTPUT"
 
       - name: Create new GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           target_commitish: ${{ github.sha }}
@@ -129,6 +138,7 @@ jobs:
 
             - 固件版本：`${{ steps.payload.outputs.tag }}`
             - 固件 SHA-256：`${{ steps.payload.outputs.sha256 }}`
+            - OpenWrt 源码提交：`${{ env.REMOTE_SHA }}`
           files: |
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
@@ -139,12 +149,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
+          set -euo pipefail
           current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
           # Confirm publication and uploaded bytes before deleting the previous release.
           python3 installer-repo/scripts/verify-release.py output/installer
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
             while IFS= read -r tag; do
-              if [[ "$tag" == ubi2-installer-* && "$tag" != "$current_tag" ]]; then
+              if [[ "$tag" =~ ^ubi2-installer-[0-9]+$ && "$tag" != "$current_tag" ]]; then
                 gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
               fi
             done

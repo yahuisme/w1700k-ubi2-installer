@@ -14,6 +14,15 @@ spec.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_missing_local_asset_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix='installer-release-') as d:
+            directory = Path(d)
+            metadata = dict(draft=False, prerelease=False, assets=[
+                dict(name='installer.itb', size=1, state='uploaded', digest='sha256:' + '0' * 64),
+            ])
+            with self.assertRaises(ValueError):
+                release.verify(metadata, directory, ['installer.itb'])
+
     def test_publication_gate(self):
         with tempfile.TemporaryDirectory(prefix='installer-release-') as d:
             directory = Path(d)

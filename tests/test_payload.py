@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -18,6 +19,11 @@ class PayloadTests(unittest.TestCase):
             'name': fetch.IMAGE, 'size': len(data),
             'digest': 'sha256:' + hashlib.sha256(data).hexdigest(),
             'browser_download_url': f'https://github.com/{fetch.REPOSITORY}/releases/download/{tag}/{fetch.IMAGE}'}]}, data
+
+    def test_missing_destination_is_rejected(self):
+        result = subprocess.run(["python3", str(Path(fetch.__file__))], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("usage", result.stderr.lower())
 
     def test_valid(self):
         release, data = self.release()
