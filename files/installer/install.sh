@@ -51,14 +51,18 @@ require_file() {
 
 check_mtd() {
   local node="/sys/class/mtd/$1"
+  local name size offset
 
-  if [ "$(cat "$node/name")" != "$2" ]; then
-    die "Unsupported MTD layout: $1"
-  fi
-  if [ "$(cat "$node/size")" -ne "$3" ]; then
-    die "Unsupported MTD layout: $1"
-  fi
-  if [ "$(cat "$node/offset")" -ne "$4" ]; then
+  name="$(cat "$node/name")" || die "Unsupported MTD layout: $1"
+  size="$(cat "$node/size")" || die "Unsupported MTD layout: $1"
+  offset="$(cat "$node/offset")" || die "Unsupported MTD layout: $1"
+  case "$size" in
+    ''|*[!0-9]*) die "Unsupported MTD layout: $1";;
+  esac
+  case "$offset" in
+    ''|*[!0-9]*) die "Unsupported MTD layout: $1";;
+  esac
+  if [ "$name" != "$2" ] || [ "$size" -ne "$3" ] || [ "$offset" -ne "$4" ]; then
     die "Unsupported MTD layout: $1"
   fi
 }

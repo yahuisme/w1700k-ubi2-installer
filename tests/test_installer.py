@@ -280,6 +280,15 @@ esac
         self.assertIn("Unsupported MTD layout", p.stdout)
         self.assertNotIn("ubiformat", self.calls)
 
+    def test_mtd_numeric_fields_must_be_valid(self):
+        for field, value in [("size", ""), ("offset", "invalid")]:
+            with self.subTest(field=field):
+                self.put(f"sys/class/mtd/mtd2/{field}", value + "\n")
+                p = self.run_installer()
+                self.assertNotEqual(p.returncode, 0, p.stdout)
+                self.assertIn("Unsupported MTD layout", p.stdout)
+                self.assertNotIn("ubiformat", self.calls)
+
     def test_recovery_readback(self):
         self.stub("ubiupdatevol", 'cp "$2" "$1"\n[ "$1" != /dev/ubi0_3 ] || printf bad > "$1"\nexit 0\n')
         p = self.run_installer()
