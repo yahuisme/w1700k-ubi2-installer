@@ -5,7 +5,17 @@ set -e
 
 rc=0
 STAGE="preflight"
-trap 'rc=$?; trap - EXIT; if [ "$rc" -ne 0 ]; then printf "[installer] ERROR: stage=%s exit=%s. Stop; preserve the serial log.\n" "$STAGE" "$rc" >&2; fi; exit "$rc"' EXIT
+trap '
+  rc=$?
+  trap - EXIT
+  if [ "$rc" -ne 0 ]; then
+    printf "[installer] ERROR: stage=%s exit=%s. Stop; preserve the serial log.\n" "$STAGE" "$rc" >&2
+    if [ "$STAGE" = "read factory data" ]; then
+      printf "[installer] If calibration data is damaged, recovery requires an original backup from this device; calibration cannot be recreated without it.\n" >&2
+    fi
+  fi
+  exit "$rc"
+' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 stage() { STAGE="$*"; log "Stage: $STAGE"; }
@@ -36,9 +46,6 @@ log() {
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
-  if [ "$STAGE" = "read factory data" ]; then
-    printf '[installer] Factory data could not be validated. If damaged, recovery requires an original backup from this device; calibration cannot be recreated without it.\n' >&2
-  fi
   exit 1
 }
 
@@ -62,7 +69,9 @@ check_mtd() {
   case "$offset" in
     ''|*[!0-9]*) die "Unsupported MTD layout: $1";;
   esac
-  if [ "$name" != "$2" ] || [ "$size" -ne "$3" ] || [ "$offset" -ne "$4" ]; then
+  # Sysfs and the expected constants are canonical decimal strings. Numeric
+  # tests can overflow in BusyBox and fail open inside this OR condition.
+  if [ "$name" != "$2" ] || [ "$size" != "$3" ] || [ "$offset" != "$4" ]; then
     die "Unsupported MTD layout: $1"
   fi
 }

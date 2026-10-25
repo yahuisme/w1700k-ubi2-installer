@@ -3,6 +3,10 @@ name: W1700k UBI Installer (ARM) w custom payload
 permissions:
   contents: read
 
+concurrency:
+  group: w1700k-installer-release
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   schedule:
@@ -150,12 +154,11 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
-          current_tag="ubi2-installer-${GITHUB_RUN_NUMBER}"
-          # Confirm publication and uploaded bytes before deleting the previous release.
+          # Confirm publication and uploaded bytes before deleting older releases.
           python3 installer-repo/scripts/verify-release.py output/installer
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
             while IFS= read -r tag; do
-              if [[ "$tag" =~ ^ubi2-installer-[0-9]+$ && "$tag" != "$current_tag" ]]; then
+              if [[ "$tag" =~ ^ubi2-installer-([0-9]+)$ && ${BASH_REMATCH[1]} -lt ${GITHUB_RUN_NUMBER} ]]; then
                 gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
               fi
             done

@@ -18,7 +18,7 @@ def select_asset(release):
     if release.get('draft') or release.get('prerelease'):
         raise ValueError('Expected a published stable release')
     tag = release['tag_name']
-    if not re.fullmatch(r'W1700K-OpenWrt-r[0-9]+-[0-9.]+-[0-9.]+', tag):
+    if not re.fullmatch(r'W1700K-OpenWrt-r[0-9]+-[0-9]{2}\.[0-9]{2}\.[0-9]{2}[-_][0-9]{2}\.[0-9]{2}\.[0-9]{2}', tag):
         raise ValueError('Expected a standard W1700K OpenWrt release')
     assets = [a for a in release['assets'] if a['name'] == IMAGE]
     if len(assets) != 1:

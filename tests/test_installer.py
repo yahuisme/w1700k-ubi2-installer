@@ -118,6 +118,10 @@ if [ "$2" = -s ]; then cat > "$1"; else cp "$2" "$1"; fi
                     self.put("sys/class/ubi/ubi0_2/name", "factory\n")
                 self.put("calls", "")
                 p = self.run_installer()
+                self.assertNotEqual(p.returncode, 0, p.stdout)
+                self.assertIn("reboot returned", p.stdout)
+                self.assertIn("stage=reboot", p.stdout)
+                self.assertIn("reboot", self.calls)
                 self.assertIn("Sync complete", p.stdout)
                 self.assertIn("ubiformat /dev/mtd2 -y", self.calls)
                 self.assertIn("ubirmvol /dev/ubi0 -N fit", self.calls)
@@ -204,6 +208,16 @@ read -r answer
         self.assertEqual(factory[0x7000:0x7003], b"FAN")
         self.assertEqual(factory[0x8000:0x8006], b"SERIAL")
 
+    def test_factory_read_io_failure_reports_backup_conditionally(self):
+        self.stub("dd", "exit 7\n")
+        p = self.run_installer()
+        self.assertEqual(p.returncode, 7, p.stdout)
+        self.assertIn("stage=read factory data exit=7", p.stdout)
+        self.assertNotIn("ubiformat", self.calls)
+        self.assertIn("If calibration data is damaged", p.stdout)
+        self.assertIn("original backup from this device", p.stdout)
+        self.assertNotIn("Factory data could not be validated.", p.stdout)
+
     def test_bad_magic_never_erases(self):
         with (self.root / "dev/mtd0").open("r+b") as f:
             f.seek(0x405000)
@@ -288,6 +302,18 @@ esac
                 self.assertNotEqual(p.returncode, 0, p.stdout)
                 self.assertIn("Unsupported MTD layout", p.stdout)
                 self.assertNotIn("ubiformat", self.calls)
+
+    def test_overflowing_mtd_numbers_never_erase(self):
+        for field in ["size", "offset"]:
+            with self.subTest(field=field):
+                self.put("sys/class/mtd/mtd2/size", str(0x1b700000) + "\n")
+                self.put("sys/class/mtd/mtd2/offset", str(0x700000) + "\n")
+                self.put("calls", "")
+                self.put(f"sys/class/mtd/mtd2/{field}", "9" * 100 + "\n")
+                p = self.run_installer()
+                self.assertNotIn("ubiformat", self.calls, p.stdout)
+                self.assertNotEqual(p.returncode, 0, p.stdout)
+                self.assertIn("Unsupported MTD layout: mtd2", p.stdout)
 
     def test_recovery_readback(self):
         self.stub("ubiupdatevol", 'cp "$2" "$1"\n[ "$1" != /dev/ubi0_3 ] || printf bad > "$1"\nexit 0\n')

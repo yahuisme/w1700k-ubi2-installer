@@ -12,8 +12,7 @@ spec.loader.exec_module(fetch)
 
 
 class PayloadTests(unittest.TestCase):
-    def release(self):
-        tag = 'W1700K-OpenWrt-r36377-26.09.19-12.31.37'
+    def release(self, tag='W1700K-OpenWrt-r36377-26.09.19-12.31.37'):
         data = bytes.fromhex('d00dfeed') + b'fixture'
         return {'tag_name': tag, 'draft': False, 'prerelease': False, 'assets': [{
             'name': fetch.IMAGE, 'size': len(data),
@@ -35,6 +34,33 @@ class PayloadTests(unittest.TestCase):
             with self.assertRaises(ValueError): fetch.verify_file(p, asset)
             p.write_bytes(data[:-1])
             with self.assertRaises(ValueError): fetch.verify_file(p, asset)
+
+    def test_standard_tag_formats(self):
+        for tag in [
+            'W1700K-OpenWrt-r36377-26.09.19-12.31.37',
+            'W1700K-OpenWrt-r37660-26.10.25_17.22.58',
+        ]:
+            with self.subTest(tag=tag):
+                release, _ = self.release(tag)
+                self.assertIs(fetch.select_asset(release), release['assets'][0])
+
+    def test_nonstandard_tags_are_rejected(self):
+        for tag in [
+            'W1700K-OpenWrt-OC-r37660-26.10.25_17.22.58',
+            'W1700K-OpenWrt-OC-r36377-26.09.19-12.31.37',
+            'W1700K-OpenWrt-r37660-26.10.25_17.22.58-OC',
+            'W1700K-OpenWrt-r37660-26.10.25_17.22.58-extra',
+            'W1700K-OpenWrt-r37660-26.10.25T17.22.58',
+            'W1700K-OpenWrt-r37660-26.10.25__17.22.58',
+            'W1700K-OpenWrt-r37660-26.10.25-17.22',
+            'W1700K-OpenWrt-r37660-26..25-17.22.58',
+            'W1700K-OpenWrt-r37660-26.10.25-17.22.58\n',
+            'W1700K-OpenWrt-rx-26.10.25_17.22.58',
+        ]:
+            with self.subTest(tag=tag):
+                release, _ = self.release(tag)
+                with self.assertRaisesRegex(ValueError, 'Expected a standard W1700K OpenWrt release'):
+                    fetch.select_asset(release)
 
     def test_wrong_release(self):
         for key, value in [('tag_name', 'W1700K-OpenWrt-OC-r1-26.09.19-12.00.00'), ('draft', True), ('prerelease', True)]:

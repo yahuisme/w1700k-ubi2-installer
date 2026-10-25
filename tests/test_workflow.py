@@ -46,6 +46,9 @@ class WorkflowTests(unittest.TestCase):
             (binary / env['RECOVERY_IMAGE']).write_bytes(b'outer-installer')
             self.assertEqual((staged / env['RECOVERY_IMAGE']).read_bytes(), b'inner-recovery')
 
+    def test_builds_are_serialized(self):
+        self.assertEqual(WORKFLOW['concurrency'], {'group': 'w1700k-installer-release', 'cancel-in-progress': False})
+
     def test_cleanup_only_after_exact_publication(self):
         for defect in ['', 'draft', 'digest', 'missing', 'state']:
             with self.subTest(defect=defect), tempfile.TemporaryDirectory(prefix='installer-cleanup-') as d:
@@ -64,7 +67,7 @@ class WorkflowTests(unittest.TestCase):
                 (p / 'release.json').write_text(json.dumps(release))
                 stub = p / 'stub'; stub.mkdir()
                 gh = stub / 'gh'
-                gh.write_text('#!/bin/sh\ncase "$1 $2" in\n"api repos/fixture/installer/releases/tags/ubi2-installer-8") cat "$AUDIT_ROOT/release.json";;\n"release list") printf "%s\\n" ubi2-installer-8 ubi2-installer-7 ubi2-installer-beta other-release;;\n"release delete") printf "%s\\n" "$3" >> "$AUDIT_ROOT/deleted";;\n*) exit 99;;\nesac\n')
+                gh.write_text('#!/bin/sh\ncase "$1 $2" in\n"api repos/fixture/installer/releases/tags/ubi2-installer-8") cat "$AUDIT_ROOT/release.json";;\n"release list") printf "%s\\n" ubi2-installer-9 ubi2-installer-8 ubi2-installer-7 ubi2-installer-beta other-release;;\n"release delete") printf "%s\\n" "$3" >> "$AUDIT_ROOT/deleted";;\n*) exit 99;;\nesac\n')
                 gh.chmod(0o755); env['PATH'] = str(stub) + ':' + env['PATH']
                 r = subprocess.run(['bash', '-euo', 'pipefail', '-c', block('Remove previous')], cwd=p, env=env, capture_output=True, text=True)
                 if defect:
