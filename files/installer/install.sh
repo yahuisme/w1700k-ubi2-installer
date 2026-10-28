@@ -132,6 +132,14 @@ hex_to_bytes() {
   echo "$1" | sed 's/../\\x&/g'
 }
 
+write_hex() {
+  local bytes
+  # Check conversion separately: printf with a command substitution hides errors.
+  bytes="$(hex_to_bytes "$1")" || die "Factory hex conversion failed"
+  printf '%b' "$bytes" > "$FACTORY_TMP/field.bin"
+  dd if="$FACTORY_TMP/field.bin" of="$FACTORY_BLOB" bs=1 seek="$2" conv=notrunc 2>/dev/null
+}
+
 get_dsd_value() {
   key="$1"
   src="$2"
@@ -233,14 +241,14 @@ build_factory_volume() {
   log "Writing WAN/LAN MACs as hex bytes..."
   WAN_HEX="$(mac_to_hex "$WAN_MAC")"
   LAN_HEX="$(mac_to_hex "$LAN_MAC")"
-  printf '%b' "$(hex_to_bytes "$WAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$WAN_MAC_OFF" conv=notrunc 2>/dev/null
-  printf '%b' "$(hex_to_bytes "$LAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$LAN_MAC_OFF" conv=notrunc 2>/dev/null
+  write_hex "$WAN_HEX" "$WAN_MAC_OFF"
+  write_hex "$LAN_HEX" "$LAN_MAC_OFF"
 
   log "Writing fan_id and serial_number as hex bytes..."
   FAN_HEX="$(str_to_hex "$FAN_ID")"
   SER_HEX="$(str_to_hex "$SERIAL_NUMBER")"
-  printf '%b' "$(hex_to_bytes "$FAN_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$FAN_ID_OFF" conv=notrunc 2>/dev/null
-  printf '%b' "$(hex_to_bytes "$SER_HEX")" | dd of="$FACTORY_BLOB" bs=1 seek="$SERIAL_OFF" conv=notrunc 2>/dev/null
+  write_hex "$FAN_HEX" "$FAN_ID_OFF"
+  write_hex "$SER_HEX" "$SERIAL_OFF"
 
   log "Factory volume built at $FACTORY_BLOB ."
   cp "$FACTORY_BLOB" "$factory_bin_path"

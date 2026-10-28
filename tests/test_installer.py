@@ -208,6 +208,24 @@ read -r answer
         self.assertEqual(factory[0x7000:0x7003], b"FAN")
         self.assertEqual(factory[0x8000:0x8006], b"SERIAL")
 
+    def test_hex_conversion_failure_stops_before_erase(self):
+        self.stub("sed", "exit 8\n")
+        p = self.run_installer()
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertNotIn("ubiformat", self.calls, p.stdout)
+        self.assertIn("stage=read factory data", p.stdout)
+
+    def test_string_conversion_failure_stops_before_erase(self):
+        self.stub("hexdump", '''case " $* " in
+  *" -n "*|*" -s "*) exec /bin/busybox hexdump "$@";;
+  *) exit 8;;
+esac
+''')
+        p = self.run_installer()
+        self.assertEqual(p.returncode, 8, p.stdout)
+        self.assertNotIn("ubiformat", self.calls, p.stdout)
+        self.assertIn("stage=read factory data", p.stdout)
+
     def test_factory_read_io_failure_reports_backup_conditionally(self):
         self.stub("dd", "exit 7\n")
         p = self.run_installer()
@@ -297,6 +315,9 @@ esac
     def test_mtd_numeric_fields_must_be_valid(self):
         for field, value in [("size", ""), ("offset", "invalid")]:
             with self.subTest(field=field):
+                self.put("sys/class/mtd/mtd2/size", str(0x1b700000) + "\n")
+                self.put("sys/class/mtd/mtd2/offset", str(0x700000) + "\n")
+                self.put("calls", "")
                 self.put(f"sys/class/mtd/mtd2/{field}", value + "\n")
                 p = self.run_installer()
                 self.assertNotEqual(p.returncode, 0, p.stdout)

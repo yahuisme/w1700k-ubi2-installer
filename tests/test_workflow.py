@@ -46,6 +46,46 @@ class WorkflowTests(unittest.TestCase):
             (binary / env['RECOVERY_IMAGE']).write_bytes(b'outer-installer')
             self.assertEqual((staged / env['RECOVERY_IMAGE']).read_bytes(), b'inner-recovery')
 
+    def test_existing_release_cannot_be_overwritten_on_rerun(self):
+        steps = [step for step in WORKFLOW['jobs']['build']['steps']
+                 if step['name'] == 'Check installer release tag']
+        command = steps[0]['run'] if steps else ':'
+        for mode in ['existing', 'draft', 'prerelease', 'new', 'api-failure', 'invalid-json', 'invalid-shape']:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix='installer-tag-') as d:
+                p = Path(d)
+                shutil.copytree(ROOT / 'scripts', p / 'installer-repo/scripts')
+                stub = p / 'stub'; stub.mkdir()
+                gh = stub / 'gh'
+                inventory = [[dict(tag_name=f'other-{n}') for n in range(100)], []]
+                if mode in ['existing', 'draft', 'prerelease']:
+                    inventory[1].append(dict(tag_name='ubi2-installer-8',
+                                             draft=mode == 'draft', prerelease=mode == 'prerelease'))
+                if mode == 'invalid-shape': inventory = {}
+                (p / 'inventory.json').write_text('invalid' if mode == 'invalid-json' else json.dumps(inventory))
+                gh.write_text('''#!/bin/sh
+[ "$1 $2 $3" = "api --paginate --slurp" ] || exit 99
+[ "$MODE" != api-failure ] || exit 7
+cat "$AUDIT_ROOT/inventory.json"
+''')
+                gh.chmod(0o755)
+                env = dict(os.environ, GITHUB_REPOSITORY='fixture/installer',
+                           GITHUB_RUN_NUMBER='8', MODE=mode, AUDIT_ROOT=str(p))
+                env['PATH'] = str(stub) + ':' + env['PATH']
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                                        cwd=p, env=env, capture_output=True, text=True)
+                if mode == 'new':
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0, result.stderr)
+                    if mode in ['existing', 'draft', 'prerelease']:
+                        self.assertIn('already exists', result.stderr)
+        release = next(s for s in WORKFLOW['jobs']['build']['steps']
+                       if s['name'] == 'Create new GitHub Release')
+        self.assertFalse(release['with']['overwrite_files'])
+        if steps:
+            names = [step['name'] for step in WORKFLOW['jobs']['build']['steps']]
+            self.assertLess(names.index('Check installer release tag'), names.index('Fetch latest OpenWrt payload'))
+
     def test_builds_are_serialized(self):
         self.assertEqual(WORKFLOW['concurrency'], {'group': 'w1700k-installer-release', 'cancel-in-progress': False})
 

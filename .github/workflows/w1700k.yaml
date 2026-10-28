@@ -34,6 +34,11 @@ jobs:
         with:
           path: installer-repo
 
+      - name: Check installer release tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: python3 installer-repo/scripts/check-release-tag.py
+
       - name: Fetch latest OpenWrt payload
         id: payload
         env:
@@ -146,7 +151,7 @@ jobs:
           files: |
             output/installer/${{ env.INSTALLER_IMAGE }}
             output/installer/${{ env.UBOOT_IMAGE }}
-          overwrite_files: true
+          overwrite_files: false
           fail_on_unmatched_files: true
 
       - name: Remove previous installer releases
