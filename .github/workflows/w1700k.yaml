@@ -156,9 +156,4 @@ jobs:
           set -euo pipefail
           # Confirm publication and uploaded bytes before deleting older releases.
           python3 installer-repo/scripts/verify-release.py output/installer
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
-            while IFS= read -r tag; do
-              if [[ "$tag" =~ ^ubi2-installer-([0-9]+)$ && ${BASH_REMATCH[1]} -lt ${GITHUB_RUN_NUMBER} ]]; then
-                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
-              fi
-            done
+          python3 installer-repo/scripts/cleanup-releases.py

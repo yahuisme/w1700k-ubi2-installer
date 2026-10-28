@@ -50,7 +50,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(WORKFLOW['concurrency'], {'group': 'w1700k-installer-release', 'cancel-in-progress': False})
 
     def test_cleanup_only_after_exact_publication(self):
-        for defect in ['', 'draft', 'digest', 'missing', 'state']:
+        for defect in ['', 'draft', 'prerelease', 'digest', 'missing', 'state', 'tag',
+                       'list-failure', 'missing-current', 'invalid-inventory', 'invalid-state',
+                       'empty-inventory', 'delete-failure', 'no-previous']:
             with self.subTest(defect=defect), tempfile.TemporaryDirectory(prefix='installer-cleanup-') as d:
                 p = Path(d)
                 shutil.copytree(ROOT / 'scripts', p / 'installer-repo/scripts')
@@ -60,18 +62,50 @@ class WorkflowTests(unittest.TestCase):
                 for key in ['INSTALLER_IMAGE', 'UBOOT_IMAGE']:
                     name = env[key]; (out / name).write_bytes(name.encode())
                     assets.append(dict(name=name, size=len(name), state='uploaded', digest='sha256:' + hashlib.sha256(name.encode()).hexdigest()))
-                release = dict(tag_name='ubi2-installer-8', draft=defect == 'draft', prerelease=False, assets=assets)
+                release = dict(tag_name='ubi2-installer-8', draft=defect == 'draft', prerelease=defect == 'prerelease', assets=assets)
+                if defect == 'tag': release['tag_name'] = 'ubi2-installer-7'
                 if defect == 'digest': assets[0]['digest'] = 'sha256:' + '0' * 64
                 if defect == 'missing': assets.pop()
                 if defect == 'state': assets[0]['state'] = 'starter'
                 (p / 'release.json').write_text(json.dumps(release))
                 stub = p / 'stub'; stub.mkdir()
                 gh = stub / 'gh'
-                gh.write_text('#!/bin/sh\ncase "$1 $2" in\n"api repos/fixture/installer/releases/tags/ubi2-installer-8") cat "$AUDIT_ROOT/release.json";;\n"release list") printf "%s\\n" ubi2-installer-9 ubi2-installer-8 ubi2-installer-7 ubi2-installer-beta other-release;;\n"release delete") printf "%s\\n" "$3" >> "$AUDIT_ROOT/deleted";;\n*) exit 99;;\nesac\n')
+                inventory = [dict(tag_name=tag, draft=draft, prerelease=pre) for tag, draft, pre in [
+                    ('ubi2-installer-9', False, False), ('ubi2-installer-8', False, False),
+                    ('ubi2-installer-7', False, False), ('ubi2-installer-6', True, False),
+                    ('ubi2-installer-5', False, True), ('ubi2-installer-beta', False, False),
+                    ('other-release', False, False), ('ubi2-installer-08', False, False),
+                ]]
+                if defect == 'missing-current':
+                    inventory = [r for r in inventory if r['tag_name'] != 'ubi2-installer-8']
+                if defect == 'no-previous':
+                    inventory = [r for r in inventory if r['tag_name'] != 'ubi2-installer-7']
+                if defect == 'invalid-state':
+                    inventory[-1]['draft'] = 'false'
+                pages = [[dict(tag_name=f'other-{n}', draft=False, prerelease=False)
+                          for n in range(100)], inventory]
+                if defect == 'empty-inventory': pages = [[]]
+                (p / 'inventory.json').write_text('not-json' if defect == 'invalid-inventory' else json.dumps(pages))
+                env['DEFECT'] = defect
+                gh.write_text('''#!/bin/sh
+case "$1 $2" in
+"api repos/fixture/installer/releases/tags/ubi2-installer-8") cat "$AUDIT_ROOT/release.json";;
+"api --paginate")
+  [ "$DEFECT" != list-failure ] || exit 7
+  cat "$AUDIT_ROOT/inventory.json";;
+"release delete")
+  [ "$DEFECT" != delete-failure ] || exit 8
+  printf "%s\\n" "$3" >> "$AUDIT_ROOT/deleted";;
+*) exit 99;;
+esac
+''')
                 gh.chmod(0o755); env['PATH'] = str(stub) + ':' + env['PATH']
                 r = subprocess.run(['bash', '-euo', 'pipefail', '-c', block('Remove previous')], cwd=p, env=env, capture_output=True, text=True)
-                if defect:
-                    self.assertNotEqual(r.returncode, 0)
+                if defect == 'no-previous':
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                    self.assertFalse((p / 'deleted').exists())
+                elif defect:
+                    self.assertNotEqual(r.returncode, 0, r.stderr)
                     self.assertFalse((p / 'deleted').exists())
                 else:
                     self.assertEqual(r.returncode, 0, r.stderr)
